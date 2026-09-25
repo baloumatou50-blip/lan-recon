@@ -1,30 +1,36 @@
-# lan-recon
+## Dépannage
 
-Outil Python de découverte de réseau local.
-Détecte automatiquement la plage réseau, scanne les machines vivantes,
-récupère IP, MAC, nom d'hôte et constructeur. Sauvegarde en JSON et TXT.
+### `sudo: ./install.sh : commande introuvable`
 
-## Installation
+Le fichier `install.sh` n'a pas le bit exécutable après un `git clone`.
+Corrige avec :
 
-    git clone https://github.com/baloumatou50-blip/lan-recon.git
-    cd lan-recon
-    sudo ./install.sh
+    chmod +x install.sh
 
-Après ça, l'outil est disponible partout sous le nom `lan-recon`.
+### `sudo: lan-recon : commande introuvable` après l'installation
 
-## Utilisation
+Sur certaines distributions, `sudo` utilise un `secure_path` qui
+n'inclut pas `/usr/local/bin`. `install.sh` crée normalement un lien
+symbolique dans `/usr/bin` pour contourner ce problème. Si ce n'est pas
+le cas, crée-le manuellement :
 
-    sudo lan-recon
+    sudo ln -sf /usr/local/bin/lan-recon /usr/bin/lan-recon
 
-## Sortie
+### Les noms d'hôte des machines Windows n'apparaissent pas
 
-- Tableau lisible dans le terminal
-- Sauvegarde dans `scans/scan_YYYYMMDD_HHMMSS.json` et `.txt`
+L'outil utilise `nmblookup` (paquet `samba-common-bin`) pour résoudre
+les noms NetBIOS. Vérifie qu'il est installé :
 
-## Désinstallation
+    sudo apt install samba-common-bin
 
-    sudo rm /usr/local/bin/lan-recon
+### Pas de constructeur affiché, seulement `-`
 
-## Licence
+La base OUI (`/usr/share/arp-scan/ieee-oui.txt`) n'est pas lisible.
+Corrige avec :
 
-MIT
+    sudo chmod +r /usr/share/arp-scan/ieee-oui.txt
+
+### Les fichiers dans `scans/` appartiennent à root
+
+Corrigé dans la version actuelle : `save_results` réattribue les fichiers
+à l'utilisateur qui a lancé la commande via `SUDO_UID`.
