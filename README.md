@@ -6,18 +6,24 @@ récupère IP, MAC, nom d'hôte et constructeur. Sauvegarde en JSON et TXT.
 
 ## Installation
 
-    sudo apt update
-    sudo apt install -y nmap samba-common-bin
-    sudo chmod +r /usr/share/arp-scan/ieee-oui.txt
+    git clone https://github.com/baloumatou50-blip/lan-recon.git
+    cd lan-recon
+    sudo ./install.sh
+
+Après ça, l'outil est disponible partout sous le nom `lan-recon`.
 
 ## Utilisation
 
-    sudo python3 lan_recon.py
+    sudo lan-recon
 
 ## Sortie
 
-- Affichage tableau dans le terminal
+- Tableau lisible dans le terminal
 - Sauvegarde dans `scans/scan_YYYYMMDD_HHMMSS.json` et `.txt`
+
+## Désinstallation
+
+    sudo rm /usr/local/bin/lan-recon
 
 ## Licence
 
