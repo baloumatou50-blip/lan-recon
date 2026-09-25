@@ -20,6 +20,7 @@ apt install -y nmap samba-common-bin arp-scan python3
 
 echo "[*] Copie de l'outil dans /usr/local/bin/lan-recon..."
 install -m 0755 "$SRC" /usr/local/bin/lan-recon
+ln -sf /usr/local/bin/lan-recon /usr/bin/lan-recon
 
 echo "[*] Rendre la base OUI lisible (facultatif)..."
 if [[ -f /usr/share/arp-scan/ieee-oui.txt ]]; then
