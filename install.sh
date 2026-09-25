@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# language: bash, file: install.sh
-# Installe lan-recon dans /usr/local/bin et ses dépendances système.
 set -euo pipefail
 
 if [[ $EUID -ne 0 ]]; then
