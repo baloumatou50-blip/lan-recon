@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-# language: Python 3.10+, file: lan_recon.py, target: Linux (Kali)
-# Dépendances : nmap (apt install nmap), arp-scan (optionnel), python3
-# Usage : sudo lan-recon
-
 import subprocess
 import re
 import socket
@@ -13,15 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-# ============================================================
-# 1. DÉTECTION AUTOMATIQUE DE LA PLAGE RÉSEAU
-# ============================================================
-
 def get_local_network() -> tuple[str, str]:
-    """
-    Lit `ip -o -4 addr show` pour trouver l'interface active et son IP/masque.
-    Retourne (cidr, interface), ex: ("192.168.1.0/24", "wlan0").
-    """
     result = subprocess.run(
         ["ip", "-o", "-4", "addr", "show"],
         capture_output=True, text=True, check=True
@@ -45,15 +33,7 @@ def get_local_network() -> tuple[str, str]:
     raise RuntimeError("Aucune interface réseau active trouvée")
 
 
-# ============================================================
-# 2. SCAN NMAP POUR TROUVER LES MACHINES VIVANTES
-# ============================================================
-
 def nmap_discover(network: str) -> list[str]:
-    """
-    Lance `nmap -sn <network>` et extrait les IP des machines vivantes.
-    Retourne une liste d'IP.
-    """
     result = subprocess.run(
         ["nmap", "-sn", "-oG", "-", network],
         capture_output=True, text=True, check=True
@@ -66,14 +46,7 @@ def nmap_discover(network: str) -> list[str]:
     return alive
 
 
-# ============================================================
-# 3. RÉCUPÉRATION DE LA MAC ET DU NOM D'HÔTE
-# ============================================================
-
 def get_mac(ip: str) -> str:
-    """
-    Récupère la MAC d'une IP via `ip neigh` ou `arp -n`.
-    """
     result = subprocess.run(
         ["ip", "neigh", "show", ip],
         capture_output=True, text=True
@@ -91,9 +64,6 @@ def get_mac(ip: str) -> str:
 
 
 def get_hostname(ip: str) -> str:
-    """
-    Résolution DNS inverse, puis fallback NetBIOS via nmblookup.
-    """
     try:
         socket.setdefaulttimeout(1.0)
         name, _, _ = socket.gethostbyaddr(ip)
@@ -117,9 +87,6 @@ def get_hostname(ip: str) -> str:
 
 
 def get_vendor(mac: str) -> str:
-    """
-    Identifie le constructeur depuis le préfixe MAC (OUI).
-    """
     if not mac:
         return ""
     oui_file = Path("/usr/share/arp-scan/ieee-oui.txt")
@@ -137,10 +104,6 @@ def get_vendor(mac: str) -> str:
         return ""
     return ""
 
-
-# ============================================================
-# 4. AFFICHAGE ET SAUVEGARDE
-# ============================================================
 
 def render_table(hosts: list[dict]) -> str:
     lines = []
@@ -180,7 +143,6 @@ def save_results(hosts: list[dict], network: str, iface: str):
     with open(txt_path, "w", encoding="utf-8") as f:
         f.write(render_table(hosts))
 
-    # si lancé via sudo, redonne la propriété à l'utilisateur appelant
     uid = int(os.environ.get("SUDO_UID", os.getuid()))
     gid = int(os.environ.get("SUDO_GID", os.getgid()))
     try:
@@ -192,10 +154,6 @@ def save_results(hosts: list[dict], network: str, iface: str):
 
     return json_path, txt_path
 
-
-# ============================================================
-# 5. PROGRAMME PRINCIPAL
-# ============================================================
 
 def main():
     if not sys.platform.startswith("linux"):
