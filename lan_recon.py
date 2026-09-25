@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-# language: Python 3.10+, file: lan_recon.py, target: Linux (Kali)
-# Dépendances : nmap (apt install nmap), arp-scan (optionnel), python3
-# Usage : sudo python3 lan_recon.py
-
 import subprocess
 import re
 import socket
@@ -10,10 +5,6 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-
-# ============================================================
-# 1. DÉTECTION AUTOMATIQUE DE LA PLAGE RÉSEAU
-# ============================================================
 
 def get_local_network() -> tuple[str, str]:
     """
@@ -24,15 +15,14 @@ def get_local_network() -> tuple[str, str]:
         ["ip", "-o", "-4", "addr", "show"],
         capture_output=True, text=True, check=True
     )
-    # chaque ligne ressemble à :
-    # 3: wlan0    inet 192.168.1.17/24 brd 192.168.1.255 scope global dynamic wlan0
+ 
     for line in result.stdout.splitlines():
         if " lo " in line:
             continue
         m = re.search(r"^\d+:\s+(\S+)\s+inet\s+(\d+\.\d+\.\d+\.\d+)/(\d+)", line)
         if m:
             iface, ip, prefix = m.group(1), m.group(2), int(m.group(3))
-            # calcul du réseau (ex: 192.168.1.17/24 -> 192.168.1.0/24)
+           
             octets = ip.split(".")
             if prefix == 24:
                 network = f"{octets[0]}.{octets[1]}.{octets[2]}.0/24"
@@ -41,15 +31,12 @@ def get_local_network() -> tuple[str, str]:
             elif prefix == 8:
                 network = f"{octets[0]}.0.0.0/8"
             else:
-                # fallback : on utilise directement ip/prefix
                 network = f"{ip}/{prefix}"
             return network, iface
     raise RuntimeError("Aucune interface réseau active trouvée")
 
 
-# ============================================================
-# 2. SCAN NMAP POUR TROUVER LES MACHINES VIVANTES
-# ============================================================
+
 
 def nmap_discover(network: str) -> list[str]:
     """
@@ -57,28 +44,26 @@ def nmap_discover(network: str) -> list[str]:
     Retourne une liste d'IP.
     """
     result = subprocess.run(
-        ["nmap", "-sn", "-oG", "-", network],  # -oG = output greppable
+        ["nmap", "-sn", "-oG", "-", network],  
         capture_output=True, text=True, check=True
     )
     alive = []
     for line in result.stdout.splitlines():
-        # ligne type : Host: 192.168.1.1 ()    Status: Up
+        
         m = re.search(r"^Host:\s+(\d+\.\d+\.\d+\.\d+)\s+.*Status:\s+Up", line)
         if m:
             alive.append(m.group(1))
     return alive
 
 
-# ============================================================
-# 3. RÉCUPÉRATION DE LA MAC ET DU NOM D'HÔTE
-# ============================================================
+
 
 def get_mac(ip: str) -> str:
     """
     Récupère la MAC d'une IP via `arp -n <ip>` ou `ip neigh`.
     Retourne "" si inconnue.
     """
-    # méthode 1 : ip neigh (moderne)
+   
     result = subprocess.run(
         ["ip", "neigh", "show", ip],
         capture_output=True, text=True
@@ -87,7 +72,6 @@ def get_mac(ip: str) -> str:
     if m:
         return m.group(1)
 
-    # méthode 2 : arp -n <ip>
     result = subprocess.run(
         ["arp", "-n", ip],
         capture_output=True, text=True
@@ -103,7 +87,7 @@ def get_hostname(ip: str) -> str:
     - puis par NetBIOS si nmblookup est dispo
     Retourne "" si aucun nom.
     """
-    # DNS inverse
+  
     try:
         socket.setdefaulttimeout(1.0)
         name, _, _ = socket.gethostbyaddr(ip)
@@ -112,13 +96,13 @@ def get_hostname(ip: str) -> str:
     except (socket.herror, socket.gaierror, socket.timeout, OSError):
         pass
 
-    # NetBIOS (windows)
+
     try:
         result = subprocess.run(
             ["nmblookup", "-A", ip],
             capture_output=True, text=True, timeout=2
         )
-        # ligne type : "<20> -         <00>  UNIQUE      Registered"
+       
         m = re.search(r"^\s+(\S+)\s+<00>\s+UNIQUE", result.stdout, re.M)
         if m:
             return m.group(1)
@@ -152,9 +136,7 @@ def get_vendor(mac: str) -> str:
     return ""
 
 
-# ============================================================
-# 4. AFFICHAGE ET SAUVEGARDE
-# ============================================================
+
 
 def render_table(hosts: list[dict]) -> str:
     """
@@ -203,9 +185,7 @@ def save_results(hosts: list[dict], network: str, iface: str):
     return json_path, txt_path
 
 
-# ============================================================
-# 5. PROGRAMME PRINCIPAL
-# ============================================================
+
 
 def main():
     if not sys.platform.startswith("linux"):
