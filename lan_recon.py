@@ -1,10 +1,21 @@
+#!/usr/bin/env python3
+# language: Python 3.10+, file: lan_recon.py, target: Linux (Kali)
+# Dépendances : nmap (apt install nmap), arp-scan (optionnel), python3
+# Usage : sudo lan-recon
+
 import subprocess
 import re
 import socket
 import json
 import sys
+import os
 from datetime import datetime
 from pathlib import Path
+
+
+# ============================================================
+# 1. DÉTECTION AUTOMATIQUE DE LA PLAGE RÉSEAU
+# ============================================================
 
 def get_local_network() -> tuple[str, str]:
     """
@@ -15,14 +26,12 @@ def get_local_network() -> tuple[str, str]:
         ["ip", "-o", "-4", "addr", "show"],
         capture_output=True, text=True, check=True
     )
- 
     for line in result.stdout.splitlines():
         if " lo " in line:
             continue
         m = re.search(r"^\d+:\s+(\S+)\s+inet\s+(\d+\.\d+\.\d+\.\d+)/(\d+)", line)
         if m:
             iface, ip, prefix = m.group(1), m.group(2), int(m.group(3))
-           
             octets = ip.split(".")
             if prefix == 24:
                 network = f"{octets[0]}.{octets[1]}.{octets[2]}.0/24"
@@ -36,7 +45,9 @@ def get_local_network() -> tuple[str, str]:
     raise RuntimeError("Aucune interface réseau active trouvée")
 
 
-
+# ============================================================
+# 2. SCAN NMAP POUR TROUVER LES MACHINES VIVANTES
+# ============================================================
 
 def nmap_discover(network: str) -> list[str]:
     """
@@ -44,26 +55,25 @@ def nmap_discover(network: str) -> list[str]:
     Retourne une liste d'IP.
     """
     result = subprocess.run(
-        ["nmap", "-sn", "-oG", "-", network],  
+        ["nmap", "-sn", "-oG", "-", network],
         capture_output=True, text=True, check=True
     )
     alive = []
     for line in result.stdout.splitlines():
-        
         m = re.search(r"^Host:\s+(\d+\.\d+\.\d+\.\d+)\s+.*Status:\s+Up", line)
         if m:
             alive.append(m.group(1))
     return alive
 
 
-
+# ============================================================
+# 3. RÉCUPÉRATION DE LA MAC ET DU NOM D'HÔTE
+# ============================================================
 
 def get_mac(ip: str) -> str:
     """
-    Récupère la MAC d'une IP via `arp -n <ip>` ou `ip neigh`.
-    Retourne "" si inconnue.
+    Récupère la MAC d'une IP via `ip neigh` ou `arp -n`.
     """
-   
     result = subprocess.run(
         ["ip", "neigh", "show", ip],
         capture_output=True, text=True
@@ -82,12 +92,8 @@ def get_mac(ip: str) -> str:
 
 def get_hostname(ip: str) -> str:
     """
-    Tente de résoudre le nom de la machine :
-    - d'abord par DNS inverse (socket.gethostbyaddr)
-    - puis par NetBIOS si nmblookup est dispo
-    Retourne "" si aucun nom.
+    Résolution DNS inverse, puis fallback NetBIOS via nmblookup.
     """
-  
     try:
         socket.setdefaulttimeout(1.0)
         name, _, _ = socket.gethostbyaddr(ip)
@@ -96,13 +102,11 @@ def get_hostname(ip: str) -> str:
     except (socket.herror, socket.gaierror, socket.timeout, OSError):
         pass
 
-
     try:
         result = subprocess.run(
             ["nmblookup", "-A", ip],
             capture_output=True, text=True, timeout=2
         )
-       
         m = re.search(r"^\s+(\S+)\s+<00>\s+UNIQUE", result.stdout, re.M)
         if m:
             return m.group(1)
@@ -115,8 +119,6 @@ def get_hostname(ip: str) -> str:
 def get_vendor(mac: str) -> str:
     """
     Identifie le constructeur depuis le préfixe MAC (OUI).
-    Utilise le fichier /usr/share/arp-scan/ieee-oui.txt si présent.
-    Retourne "" si inconnu.
     """
     if not mac:
         return ""
@@ -136,12 +138,11 @@ def get_vendor(mac: str) -> str:
     return ""
 
 
-
+# ============================================================
+# 4. AFFICHAGE ET SAUVEGARDE
+# ============================================================
 
 def render_table(hosts: list[dict]) -> str:
-    """
-    Construit un tableau texte lisible.
-    """
     lines = []
     lines.append("=" * 90)
     lines.append(f"Scan LAN — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -159,9 +160,6 @@ def render_table(hosts: list[dict]) -> str:
 
 
 def save_results(hosts: list[dict], network: str, iface: str):
-    """
-    Sauvegarde en JSON et en texte brut dans ./scans/
-    """
     out_dir = Path("scans")
     out_dir.mkdir(exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -182,10 +180,22 @@ def save_results(hosts: list[dict], network: str, iface: str):
     with open(txt_path, "w", encoding="utf-8") as f:
         f.write(render_table(hosts))
 
+    # si lancé via sudo, redonne la propriété à l'utilisateur appelant
+    uid = int(os.environ.get("SUDO_UID", os.getuid()))
+    gid = int(os.environ.get("SUDO_GID", os.getgid()))
+    try:
+        os.chown(out_dir, uid, gid)
+        for p in (json_path, txt_path):
+            os.chown(p, uid, gid)
+    except PermissionError:
+        pass
+
     return json_path, txt_path
 
 
-
+# ============================================================
+# 5. PROGRAMME PRINCIPAL
+# ============================================================
 
 def main():
     if not sys.platform.startswith("linux"):
